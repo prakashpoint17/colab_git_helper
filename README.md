@@ -1,11 +1,11 @@
 
 # Colab Git Helper
 
-A lightweight Python utility designed for Google Colab to automate repository initialization, authentication, commits, and pushes directly from Google Drive in simple, decoupled functions.
+A lightweight Python utility designed for Google Colab to automate repository initialization, authentication, commits, and pushes directly from Google Drive in simple, decoupled methods.
 
 ---
 
-> **Note:** Open a Google Colab notebook, mount your Google Drive, and follow the steps below.
+> **Quick Demo:** Check out [`sample_setup_git_colab.ipynb`](sample_setup_git_colab.ipynb) in this repository for a complete end-to-end interactive demo in Google Colab.
 
 ---
 
@@ -14,7 +14,7 @@ A lightweight Python utility designed for Google Colab to automate repository in
 Install directly into your Google Colab runtime:
 
 ```bash
-!pip install git+[https://github.com/prakashpoint17/colab_git_helper.git](https://github.com/prakashpoint17/colab_git_helper.git)
+!pip install --upgrade git+[https://github.com/prakashpoint17/colab_git_helper.git](https://github.com/prakashpoint17/colab_git_helper.git)
 
 ```
 
@@ -32,40 +32,52 @@ from google.colab import drive
 drive.mount('/content/drive')
 
 # 2. Import and initialize
-from colab_git import setup_repo
+from colab_git import GitRepo
 
-# Runs fully interactively
-setup_repo()
+# Runs fully interactively (prompts for path, username, repo URL, token, etc.)
+repo = GitRepo()
 
 ```
 
 #### What happens automatically during setup:
 
-* Configures your project directory in Google Drive.
-* Generates a tailored `.gitignore` (ignoring `.ipynb_checkpoints/`, `__pycache__/`, `.env`, and config files).
-* Initializes local git and sets default branch to `main`.
+* Configures and switches to your project directory in Google Drive.
+* Generates a tailored `.gitignore` (ignoring `.ipynb_checkpoints/`, `__pycache__/`, `.env`, and `.colabgit_config`).
+* Initializes local git and sets the default branch to `main`.
 * Configures git username, email, and remote origin URL.
-* Saves a secure local config so you never have to re-enter credentials for this folder across disconnected sessions.
-* Stages all files, creates your initial commit, and pushes to GitHub.
+* Saves a secure local configuration (`.colabgit_config`) inside your project directory.
+* Stages all files, creates your initial commit, and pushes to GitHub using secure runtime credentials.
 
 ---
 
-### Step 2: Push Ongoing Changes (`quick_push`)
+### Step 2: Push Subsequent Changes
 
-After modifying code, saving models, or generating artifacts, push your changes in one line. **This works even after the runtime disconnects or restarts without rerunning `setup_repo()`:**
+#### Scenario A: Same Colab Session (using the active instance)
 
 ```python
-from colab_git import quick_push
+# Stages changes, prompts for commit message, and pushes immediately
+repo.push_again()
 
-# Prompts for commit message and pushes immediately
-quick_push()
+# Or pass the commit message directly:
+repo.push_again("Updated model hyperparameters and loss curves")
 
 ```
 
-You can also pass the message and path directly without prompts:
+#### Scenario B: New / Disconnected Session (after runtime restart)
+
+When your Colab session disconnects or restarts, the `repo` variable is wiped from memory. You do **not** need to run `GitRepo()` again — just import the standalone `push_again` function:
 
 ```python
-quick_push(message="Updated model hyperparameters and loss curves")
+from google.colab import drive
+drive.mount('/content/drive')
+
+from colab_git import push_again
+
+# Reads saved project config and pushes updates
+push_again()
+
+# Or specify project path and message explicitly:
+push_again(path="/content/drive/MyDrive/MyProject", message="Updated dataset preprocessing")
 
 ```
 
@@ -73,32 +85,41 @@ quick_push(message="Updated model hyperparameters and loss curves")
 
 ## 🖥️ Interactive Console Walkthrough
 
-### When running `setup_repo()`:
+### Initial Setup (`repo = GitRepo()`):
 
 ```text
 📁 Enter project path (e.g. /content/drive/MyDrive/...): /content/drive/MyDrive/Health_insurance_prediction_ML
-👤 Enter GitHub Username: prakashpoint17
-🔗 Enter GitHub Repo URL (HTTPS): [https://github.com/prakashpoint17/Health_insurance_prediction_ML.git](https://github.com/prakashpoint17/Health_insurance_prediction_ML.git)
-📧 Enter Git Email (Press Enter for 'prakashpoint17@users.noreply.github.com'): prakashpoint2005@gmail.com
+
+👤 Enter GitHub Username: 
+
+🔗 Enter GitHub Repo URL (HTTPS): https://github.com/prakashpoint17/Health_insurance_prediction_ML.git
+
+📧 Enter Git Email (Press Enter for 'gmail@users.noreply.github.com'): mailid@gmail.com
+
 🔑 Enter GitHub Personal Access Token (hidden): ········
+
 💬 Enter initial commit message (Press Enter for 'Initial commit'): Initial pipeline setup
+
+📦 Staging and creating initial commit...
+🚀 Pushing to remote 'main' branch...
+✓ Push successful!
 
 ```
 
-### When running `quick_push()`:
+### Subsequent Pushes (`push_again()`):
 
 ```text
-💬 Enter commit message (Press Enter for 'Update changes'): Added evaluate_metrics script
-🚀 Pushing updates to GitHub...
-✓ Successfully pushed!
+💬 Enter commit message (Press Enter for 'Update changes'): Added evaluation metrics script
+🚀 Pushing to remote 'main' branch...
+✓ Push successful!
 
 ```
 
 ---
 
-## ⚙️ Function Reference
+## ⚙️ Reference
 
-### `setup_repo(...)`
+### `GitRepo(...)`
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -109,11 +130,11 @@ quick_push(message="Updated model hyperparameters and loss curves")
 | `token` | `str` | `None` (Prompted) | GitHub Personal Access Token (hidden password input). |
 | `initial_commit_msg` | `str` | `None` (Prompted) | Initial commit description. |
 
-### `quick_push(...)`
+### `push_again(...)` / `repo.push_again(...)`
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `path` | `str` | `None` (Current dir / Prompted) | Project directory containing saved config. |
+| `path` | `str` | `None` (Current dir / Prompted) | Project directory containing saved `.colabgit_config`. |
 | `message` | `str` | `None` (Prompted) | Commit message for this update batch. |
 
 ---
