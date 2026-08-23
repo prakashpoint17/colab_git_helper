@@ -1,85 +1,109 @@
 import os
+import json
 import subprocess
 from getpass import getpass
 
-class GitRepo:
-    def __init__(self, path=None, username=None, repo_url=None, email=None, token=None, initial_commit_msg=None):
-        # 1. Prompt interactively if parameters are not provided
-        self.path = os.path.abspath(path or input("📁 Enter project path (e.g. /content/drive/MyDrive/...): ").strip())
-        self.username = username or input("👤 Enter GitHub Username: ").strip()
-        
-        raw_repo_url = repo_url or input("🔗 Enter GitHub Repo URL (HTTPS): ").strip()
-        self.repo_url = raw_repo_url.rstrip("/")
-        
-        default_email = f"{self.username}@users.noreply.github.com"
-        entered_email = email or input(f"📧 Enter Git Email (Press Enter for '{default_email}'): ").strip()
-        self.email = entered_email if entered_email else default_email
-        
-        self.token = token or getpass("🔑 Enter GitHub Personal Access Token (hidden): ").strip()
-        self.initial_commit_msg = initial_commit_msg or input("💬 Enter initial commit message (Press Enter for 'Initial commit'): ").strip()
-        if not self.initial_commit_msg:
-            self.initial_commit_msg = "Initial commit"
+CONFIG_FILE = ".colabgit_config"
 
-        # 2. Extract repository name
-        self.repo_name = self.repo_url.split("/")[-1]
-        if not self.repo_name.endswith(".git"):
-            self.repo_name += ".git"
+def _load_config(path):
+    config_path = os.path.join(path, CONFIG_FILE)
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            return json.load(f)
+    return {}
 
-        # 3. Switch to directory and run setup
-        os.makedirs(self.path, exist_ok=True)
-        os.chdir(self.path)
-        self._setup_repo()
+def _save_config(path, data):
+    config_path = os.path.join(path, CONFIG_FILE)
+    with open(config_path, "w") as f:
+        json.dump(data, f)
 
-    def _run(self, cmd):
-        result = subprocess.run(cmd, shell=True, cwd=self.path, capture_output=True, text=True)
-        if result.stdout.strip():
-            print(result.stdout.strip())
-        if result.returncode != 0 and result.stderr.strip():
-            print(f"Notice/Error: {result.stderr.strip()}")
-        return result.returncode == 0
+def _run_cmd(cmd, cwd):
+    result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.returncode != 0 and result.stderr.strip():
+        print(f"Notice: {result.stderr.strip()}")
+    return result.returncode == 0
 
-    def _setup_repo(self):
-        # Create .gitignore if not exists
-        gitignore_path = os.path.join(self.path, ".gitignore")
-        if not os.path.exists(gitignore_path):
-            with open(gitignore_path, "w") as f:
-                f.write(".ipynb_checkpoints/\n__pycache__/\n*.pyc\n.env\n")
-            print("✓ Generated .gitignore")
+def setup_repo(path=None, username=None, repo_url=None, email=None, token=None, initial_commit_msg=None):
+    """Step 1 & 2: Sets up Git configuration, links remote, and creates initial commit."""
+    target_path = os.path.abspath(path or input("📁 Enter project path (e.g. /content/drive/MyDrive/...): ").strip())
+    os.makedirs(target_path, exist_ok=True)
 
-        # Git init & branch configuration
-        self._run("git init")
-        self._run("git branch -M main")
+    user = username or input("👤 Enter GitHub Username: ").strip()
+    raw_url = repo_url or input("🔗 Enter GitHub Repo URL (HTTPS): ").strip().rstrip("/")
+    
+    default_email = f"{user}@users.noreply.github.com"
+    entered_email = email or input(f"📧 Enter Git Email (Press Enter for '{default_email}'): ").strip()
+    mail = entered_email if entered_email else default_email
+    
+    pat = token or getpass("🔑 Enter GitHub Personal Access Token (hidden): ").strip()
+    
+    repo_name = raw_url.split("/")[-1]
+    if not repo_name.endswith(".git"):
+        repo_name += ".git"
 
-        # Set user config
-        self._run(f'git config user.name "{self.username}"')
-        self._run(f'git config user.email "{self.email}"')
+    # Save credentials locally for seamless future pushes
+    _save_config(target_path, {
+        "username": user,
+        "repo_name": repo_name,
+        "token": pat
+    })
 
-        # Link remote
-        self._run("git remote remove origin")
-        self._run(f'git remote add origin "{self.repo_url}"')
+    # .gitignore handling
+    gitignore_path = os.path.join(target_path, ".gitignore")
+    ignore_entries = {".ipynb_checkpoints/", "__pycache__/", "*.pyc", ".env", CONFIG_FILE}
+    existing = set()
+    if os.path.exists(gitignore_path):
+        with open(gitignore_path, "r") as f:
+            existing = set(f.read().splitlines())
+    
+    with open(gitignore_path, "a" if os.path.exists(gitignore_path) else "w") as f:
+        for item in ignore_entries:
+            if item not in existing:
+                f.write(f"\n{item}")
 
-        # Check if initial commit is required
-        status_res = subprocess.run("git status --porcelain", shell=True, cwd=self.path, capture_output=True, text=True)
-        if status_res.stdout.strip():
-            print("📦 Staging and creating initial commit...")
-            self._run("git add .")
-            self._run(f'git commit -m "{self.initial_commit_msg}"')
-            self._push_to_remote()
-        else:
-            print("✓ Repository is up-to-date. No new files to commit.")
+    # Git init and configurations
+    _run_cmd("git init", cwd=target_path)
+    _run_cmd("git branch -M main", cwd=target_path)
+    _run_cmd(f'git config user.name "{user}"', cwd=target_path)
+    _run_cmd(f'git config user.email "{mail}"', cwd=target_path)
+    _run_cmd("git remote remove origin", cwd=target_path)
+    _run_cmd(f'git remote add origin "{raw_url}"', cwd=target_path)
 
-    def _push_to_remote(self, branch="main"):
-        auth_url = f"https://{self.username}:{self.token}@github.com/{self.username}/{self.repo_name}"
-        print(f"🚀 Pushing to remote '{branch}' branch...")
-        if self._run(f"git push {auth_url} HEAD:{branch}"):
-            print("✓ Push successful!")
+    # Initial commit & push
+    commit_msg = initial_commit_msg or input("💬 Enter initial commit message (Press Enter for 'Initial commit'): ").strip()
+    if not commit_msg:
+        commit_msg = "Initial commit"
 
-    def quick_push(self, message=None):
-        """Stages all modified/new files, prompts for commit message if omitted, and pushes."""
-        commit_msg = message or input("💬 Enter commit message: ").strip()
-        if not commit_msg:
-            commit_msg = "Update changes"
-            
-        self._run("git add .")
-        self._run(f'git commit -m "{commit_msg}"')
-        self._push_to_remote()
+    _run_cmd("git add .", cwd=target_path)
+    _run_cmd(f'git commit -m "{commit_msg}"', cwd=target_path)
+    
+    auth_url = f"https://{user}:{pat}@github.com/{user}/{repo_name}"
+    print("🚀 Pushing initial commit to remote 'main'...")
+    if _run_cmd(f"git push {auth_url} HEAD:main", cwd=target_path):
+        print("✓ Initial setup and push complete!")
+
+def quick_push(path=None, message=None):
+    """Step 3: Can be called anytime, even across disconnected Colab sessions."""
+    target_path = os.path.abspath(path or os.getcwd())
+    cfg = _load_config(target_path)
+
+    if not cfg:
+        target_path = os.path.abspath(input("📁 Enter project path: ").strip())
+        cfg = _load_config(target_path)
+        if not cfg:
+            print("❌ No config found. Run setup_repo() once first.")
+            return
+
+    msg = message or input("💬 Enter commit message (Press Enter for 'Update changes'): ").strip()
+    if not msg:
+        msg = "Update changes"
+
+    _run_cmd("git add .", cwd=target_path)
+    _run_cmd(f'git commit -m "{msg}"', cwd=target_path)
+
+    auth_url = f"https://{cfg['username']}:{cfg['token']}@github.com/{cfg['username']}/{cfg['repo_name']}"
+    print("🚀 Pushing updates to GitHub...")
+    if _run_cmd(f"git push {auth_url} HEAD:main", cwd=target_path):
+        print("✓ Successfully pushed!")
