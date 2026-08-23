@@ -6,17 +6,13 @@ from getpass import getpass
 
 class GitRepo:
     """
-    Google Colab Git/GitHub workflow helper.
+    Google Colab Git workflow helper.
 
     First-time setup:
         repo = GitRepo()
 
-    Same Colab session:
+    Same session:
         repo.push_again()
-
-    After Colab runtime restart/disconnect:
-        from colab_git import push_again
-        push_again()
     """
 
     CONFIG_FILE = ".colabgit_config"
@@ -30,10 +26,6 @@ class GitRepo:
         ".colabgit_config",
     ]
 
-    # ============================================================
-    # INITIALIZATION
-    # ============================================================
-
     def __init__(
         self,
         path=None,
@@ -43,16 +35,10 @@ class GitRepo:
         token=None,
         initial_commit_msg=None,
     ):
-        """
-        Initialize and configure a Git repository.
 
-        If configuration already exists in .colabgit_config,
-        previously saved values are reused automatically.
-        """
-
-        # --------------------------------------------------------
-        # 1. Project path
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Project path
+        # --------------------------------------------------
 
         entered_path = path or input(
             "📁 Enter project path "
@@ -69,15 +55,15 @@ class GitRepo:
         os.makedirs(self.path, exist_ok=True)
         os.chdir(self.path)
 
-        # --------------------------------------------------------
-        # 2. Load existing configuration
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Load previous configuration
+        # --------------------------------------------------
 
         config = self._load_config()
 
-        # --------------------------------------------------------
-        # 3. GitHub username
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # GitHub username
+        # --------------------------------------------------
 
         self.username = (
             username
@@ -90,9 +76,9 @@ class GitRepo:
                 "GitHub username cannot be empty."
             )
 
-        # --------------------------------------------------------
-        # 4. Repository URL
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Repository URL
+        # --------------------------------------------------
 
         raw_repo_url = (
             repo_url
@@ -107,19 +93,19 @@ class GitRepo:
                 "GitHub repository URL cannot be empty."
             )
 
-        self.repo_url = raw_repo_url.strip().rstrip("/")
+        self.repo_url = raw_repo_url.rstrip("/")
 
         if not self.repo_url.startswith(
             "https://github.com/"
         ):
             raise ValueError(
                 "Only HTTPS GitHub repository URLs "
-                "are currently supported."
+                "are supported."
             )
 
-        # --------------------------------------------------------
-        # 5. Git email
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Email
+        # --------------------------------------------------
 
         default_email = (
             f"{self.username}@users.noreply.github.com"
@@ -140,9 +126,9 @@ class GitRepo:
             else default_email
         )
 
-        # --------------------------------------------------------
-        # 6. GitHub Personal Access Token
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Token
+        # --------------------------------------------------
 
         self.token = (
             token
@@ -158,53 +144,43 @@ class GitRepo:
                 "GitHub Personal Access Token cannot be empty."
             )
 
-        # --------------------------------------------------------
-        # 7. Repository name
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Repository name
+        # --------------------------------------------------
 
         self.repo_name = self._extract_repo_name(
             self.repo_url
         )
 
-        # --------------------------------------------------------
-        # 8. Save configuration
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Save configuration
+        # --------------------------------------------------
 
-        self._save_config(
-            {
-                "username": self.username,
-                "repo_url": self.repo_url,
-                "repo_name": self.repo_name,
-                "email": self.email,
-                "token": self.token,
-            }
-        )
+        self._save_config({
+            "username": self.username,
+            "repo_url": self.repo_url,
+            "repo_name": self.repo_name,
+            "email": self.email,
+            "token": self.token,
+        })
 
-        # --------------------------------------------------------
-        # 9. Initial repository setup
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Initial setup
+        # --------------------------------------------------
 
         self._setup_repo(initial_commit_msg)
 
-    # ============================================================
-    # CONFIGURATION
-    # ============================================================
+    # ======================================================
+    # CONFIG
+    # ======================================================
 
     def _config_path(self):
-        """Return the configuration file path."""
-
         return os.path.join(
             self.path,
             self.CONFIG_FILE
         )
 
     def _load_config(self):
-        """
-        Load saved project configuration.
-
-        Returns an empty dictionary when no configuration
-        exists yet.
-        """
 
         config_path = self._config_path()
 
@@ -221,102 +197,72 @@ class GitRepo:
 
         except json.JSONDecodeError as error:
             raise ValueError(
-                f"Invalid configuration file: "
-                f"{config_path}"
+                f"Invalid configuration file: {config_path}"
             ) from error
 
     def _save_config(self, data):
-        """Save project configuration locally."""
-
-        config_path = self._config_path()
 
         with open(
-            config_path,
+            self._config_path(),
             "w",
             encoding="utf-8"
         ) as file:
+
             json.dump(
                 data,
                 file,
                 indent=2
             )
 
-    # ============================================================
+    # ======================================================
     # REPOSITORY NAME
-    # ============================================================
+    # ======================================================
 
     @staticmethod
     def _extract_repo_name(repo_url):
-        """Extract repository name from GitHub URL."""
 
-        repo_name = repo_url.rstrip("/").split("/")[-1]
+        name = repo_url.rstrip("/").split("/")[-1]
 
-        if repo_name.endswith(".git"):
-            repo_name = repo_name[:-4]
+        if name.endswith(".git"):
+            name = name[:-4]
 
-        if not repo_name:
+        if not name:
             raise ValueError(
                 "Could not determine repository name."
             )
 
-        return repo_name
+        return name
 
-    # ============================================================
-    # COMMAND EXECUTION
-    # ============================================================
+    # ======================================================
+    # COMMAND RUNNER
+    # ======================================================
 
-    def _run_cmd(
-        self,
-        command,
-        check=False,
-        env=None
-    ):
-        """
-        Safely execute a command without shell=True.
-
-        Example:
-            self._run_cmd(
-                ["git", "commit", "-m", message]
-            )
-        """
+    def _run(self, command, env=None):
 
         result = subprocess.run(
             command,
             cwd=self.path,
             capture_output=True,
             text=True,
-            check=False,
             env=env,
         )
 
-        stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
+        if result.stdout.strip():
+            print(result.stdout.strip())
 
-        if stdout:
-            print(stdout)
-
-        if result.returncode != 0 and stderr:
-            if check:
-                raise RuntimeError(stderr)
-
-            print(
-                f"Notice: {stderr}"
-            )
-
-        if check and result.returncode != 0:
-            raise RuntimeError(
-                stderr
-                or f"Command failed: {' '.join(command)}"
-            )
+        if result.returncode != 0:
+            if result.stderr.strip():
+                print(
+                    f"Notice: {result.stderr.strip()}"
+                )
 
         return result
 
-    # ============================================================
-    # GIT REPOSITORY CHECK
-    # ============================================================
+    # ======================================================
+    # GIT CHECK
+    # ======================================================
 
     def _is_git_repo(self):
-        """Check whether the project is a Git repository."""
 
         return os.path.isdir(
             os.path.join(
@@ -325,15 +271,11 @@ class GitRepo:
             )
         )
 
-    # ============================================================
+    # ======================================================
     # GITIGNORE
-    # ============================================================
+    # ======================================================
 
     def _ensure_gitignore(self):
-        """
-        Create/update .gitignore without duplicating
-        existing entries.
-        """
 
         gitignore_path = os.path.join(
             self.path,
@@ -343,11 +285,13 @@ class GitRepo:
         existing = []
 
         if os.path.exists(gitignore_path):
+
             with open(
                 gitignore_path,
                 "r",
                 encoding="utf-8"
             ) as file:
+
                 existing = [
                     line.strip()
                     for line in file.read().splitlines()
@@ -356,163 +300,133 @@ class GitRepo:
 
         changed = False
 
-        for item in self.DEFAULT_GITIGNORE:
-            if item not in existing:
-                existing.append(item)
+        for entry in self.DEFAULT_GITIGNORE:
+
+            if entry not in existing:
+
+                existing.append(entry)
                 changed = True
 
         if (
             changed
             or not os.path.exists(gitignore_path)
         ):
+
             with open(
                 gitignore_path,
                 "w",
                 encoding="utf-8"
             ) as file:
+
                 file.write(
                     "\n".join(existing) + "\n"
                 )
 
             print("✓ .gitignore configured")
 
-    # ============================================================
+    # ======================================================
     # GIT INITIALIZATION
-    # ============================================================
+    # ======================================================
 
-    def _ensure_git_repo(self):
-        """Initialize and configure the Git repository."""
+    def _ensure_git(self):
 
         if not self._is_git_repo():
 
-            self._run_cmd(
-                ["git", "init"],
-                check=True
+            self._run(
+                ["git", "init"]
             )
 
-        self._run_cmd(
+        self._run(
             [
                 "git",
                 "branch",
                 "-M",
                 self.DEFAULT_BRANCH
-            ],
-            check=True
+            ]
         )
 
-        self._run_cmd(
+        self._run(
             [
                 "git",
                 "config",
                 "user.name",
                 self.username
-            ],
-            check=True
+            ]
         )
 
-        self._run_cmd(
+        self._run(
             [
                 "git",
                 "config",
                 "user.email",
                 self.email
-            ],
-            check=True
+            ]
         )
 
-    # ============================================================
-    # REMOTE CONFIGURATION
-    # ============================================================
+    # ======================================================
+    # REMOTE
+    # ======================================================
 
     def _ensure_remote(self):
-        """
-        Ensure that origin exists and points to the
-        configured GitHub repository.
-        """
 
-        result = self._run_cmd(
+        result = self._run(
             [
                 "git",
                 "remote",
                 "get-url",
                 "origin"
-            ],
-            check=False
+            ]
         )
 
         current_remote = result.stdout.strip()
 
-        # No origin exists
         if not current_remote:
 
-            self._run_cmd(
+            self._run(
                 [
                     "git",
                     "remote",
                     "add",
                     "origin",
                     self.repo_url
-                ],
-                check=True
+                ]
             )
 
-            return
+        elif current_remote != self.repo_url:
 
-        # Origin exists but points somewhere else
-        if current_remote != self.repo_url:
-
-            self._run_cmd(
+            self._run(
                 [
                     "git",
                     "remote",
                     "set-url",
                     "origin",
                     self.repo_url
-                ],
-                check=True
+                ]
             )
 
-    # ============================================================
-    # CHANGE DETECTION
-    # ============================================================
+    # ======================================================
+    # CHANGES
+    # ======================================================
 
     def _has_changes(self):
-        """
-        Check whether the working tree contains changes.
-        """
 
-        result = self._run_cmd(
+        result = self._run(
             [
                 "git",
                 "status",
                 "--porcelain"
-            ],
-            check=True
+            ]
         )
 
         return bool(
             result.stdout.strip()
         )
 
-    # ============================================================
-    # AUTHENTICATED PUSH
-    # ============================================================
+    # ======================================================
+    # PUSH
+    # ======================================================
 
-    def _push_to_remote(
-        self,
-        branch=None
-    ):
-        """
-        Push changes to GitHub.
-
-        The token is supplied through GIT_ASKPASS rather than
-        being embedded directly into the Git remote URL.
-        """
-
-        branch = (
-            branch
-            or self.DEFAULT_BRANCH
-        )
+    def _push(self):
 
         askpass_file = os.path.join(
             self.path,
@@ -537,6 +451,7 @@ else:
                 "w",
                 encoding="utf-8"
             ) as file:
+
                 file.write(askpass_code)
 
             try:
@@ -551,92 +466,65 @@ else:
 
             env["GIT_ASKPASS"] = askpass_file
             env["GIT_TERMINAL_PROMPT"] = "0"
-
-            env["COLABGIT_USERNAME"] = (
-                self.username
-            )
-
-            env["COLABGIT_TOKEN"] = (
-                self.token
-            )
+            env["COLABGIT_USERNAME"] = self.username
+            env["COLABGIT_TOKEN"] = self.token
 
             print(
                 f"🚀 Pushing to remote "
-                f"'{branch}' branch..."
+                f"'{self.DEFAULT_BRANCH}' branch..."
             )
 
-            result = self._run_cmd(
+            result = self._run(
                 [
                     "git",
                     "push",
                     "-u",
                     "origin",
-                    branch
+                    self.DEFAULT_BRANCH
                 ],
-                check=False,
                 env=env
             )
 
             if result.returncode == 0:
 
-                print(
-                    "✓ Push successful!"
-                )
+                print("✓ Push successful!")
 
                 return True
 
-            print(
-                "❌ Push failed."
-            )
+            print("❌ Push failed.")
 
             if result.stderr.strip():
-                print(
-                    result.stderr.strip()
-                )
+                print(result.stderr.strip())
 
             return False
 
         finally:
 
-            if os.path.exists(
-                askpass_file
-            ):
+            if os.path.exists(askpass_file):
+
                 try:
-                    os.remove(
-                        askpass_file
-                    )
+                    os.remove(askpass_file)
                 except OSError:
                     pass
 
-    # ============================================================
+    # ======================================================
     # INITIAL SETUP
-    # ============================================================
+    # ======================================================
 
     def _setup_repo(
         self,
         initial_commit_msg=None
     ):
-        """
-        Perform first-time repository setup.
-
-        Steps:
-            .gitignore
-            Git initialization
-            Git configuration
-            Remote configuration
-            Initial commit
-            Initial push
-        """
 
         self._ensure_gitignore()
 
-        self._ensure_git_repo()
+        self._ensure_git()
 
         self._ensure_remote()
 
-        # --------------------------------------------------------
-        # Check whether there is anything to commit
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Check whether initial commit is required
+        # --------------------------------------------------
 
         if not self._has_changes():
 
@@ -644,13 +532,13 @@ else:
                 "✓ Repository is up-to-date."
             )
 
-            return
+            return True
 
-        # --------------------------------------------------------
+        # --------------------------------------------------
         # Initial commit message
-        # --------------------------------------------------------
+        # --------------------------------------------------
 
-        commit_msg = (
+        message = (
             initial_commit_msg
             or input(
                 "💬 Enter initial commit message "
@@ -658,95 +546,71 @@ else:
             ).strip()
         )
 
-        if not commit_msg:
-            commit_msg = "Initial commit"
-
-        # --------------------------------------------------------
-        # Stage files
-        # --------------------------------------------------------
+        if not message:
+            message = "Initial commit"
 
         print(
             "📦 Staging and creating initial commit..."
         )
 
-        self._run_cmd(
+        self._run(
             [
                 "git",
                 "add",
                 "."
-            ],
-            check=True
+            ]
         )
 
-        # --------------------------------------------------------
-        # Commit
-        # --------------------------------------------------------
-
-        commit_result = self._run_cmd(
+        commit = self._run(
             [
                 "git",
                 "commit",
                 "-m",
-                commit_msg
-            ],
-            check=False
+                message
+            ]
         )
 
-        if commit_result.returncode != 0:
+        if commit.returncode != 0:
 
-            print(
-                "❌ Initial commit failed."
-            )
+            print("❌ Initial commit failed.")
 
             return False
 
-        # --------------------------------------------------------
-        # Push
-        # --------------------------------------------------------
+        return self._push()
 
-        return self._push_to_remote()
-
-    # ============================================================
-    # SAME SESSION: repo.push_again()
-    # ============================================================
+    # ======================================================
+    # SAME SESSION
+    # ======================================================
 
     def push_again(
         self,
         message=None
     ):
         """
-        Stage, commit and push changes.
-
-        This method is intended for the SAME Colab session
-        where the GitRepo object already exists.
+        Push changes during the same Colab session.
 
         Example:
-            repo = GitRepo()
             repo.push_again()
 
-        Or:
+        or:
             repo.push_again("Updated model")
         """
 
         if not self._is_git_repo():
 
             print(
-                "❌ This directory is not a Git repository."
+                "❌ Git repository not found."
             )
 
             return False
 
-        # --------------------------------------------------------
-        # Ensure configuration is still correct
-        # --------------------------------------------------------
-
         self._ensure_gitignore()
-        self._ensure_git_repo()
+        self._ensure_git()
         self._ensure_remote()
 
-        # --------------------------------------------------------
-        # Check changes
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # Nothing changed
+        # --------------------------------------------------
 
         if not self._has_changes():
 
@@ -757,11 +621,11 @@ else:
 
             return True
 
-        # --------------------------------------------------------
+        # --------------------------------------------------
         # Commit message
-        # --------------------------------------------------------
+        # --------------------------------------------------
 
-        commit_msg = (
+        commit_message = (
             message
             or input(
                 "💬 Enter commit message "
@@ -769,303 +633,305 @@ else:
             ).strip()
         )
 
-        if not commit_msg:
-            commit_msg = "Update changes"
+        if not commit_message:
+            commit_message = "Update changes"
 
-        # --------------------------------------------------------
+        # --------------------------------------------------
         # Stage
-        # --------------------------------------------------------
+        # --------------------------------------------------
 
-        self._run_cmd(
+        self._run(
             [
                 "git",
                 "add",
                 "."
-            ],
-            check=True
+            ]
         )
 
-        # --------------------------------------------------------
+        # --------------------------------------------------
         # Commit
-        # --------------------------------------------------------
+        # --------------------------------------------------
 
-        commit_result = self._run_cmd(
+        commit = self._run(
             [
                 "git",
                 "commit",
                 "-m",
-                commit_msg
-            ],
-            check=False
+                commit_message
+            ]
         )
 
-        if commit_result.returncode != 0:
+        if commit.returncode != 0:
+
+            print("❌ Commit failed.")
+
+            return False
+
+        # --------------------------------------------------
+        # Push
+        # --------------------------------------------------
+
+        return self._push()
+
+
+# ==========================================================
+# NEW SESSION
+# ==========================================================
+
+def push_again(
+    path=None,
+    message=None
+):
+    """
+    Standalone push function for a new/restarted
+    Google Colab session.
+
+    Example:
+
+        from colab_git import push_again
+
+        push_again()
+
+    Or:
+
+        push_again(
+            message="Updated model"
+        )
+
+    Or:
+
+        push_again(
+            path="/content/drive/MyDrive/project",
+            message="Updated model"
+        )
+    """
+
+    # ------------------------------------------------------
+    # Resolve project path
+    # ------------------------------------------------------
+
+    if path:
+
+        target_path = os.path.abspath(
+            os.path.expanduser(path)
+        )
+
+    else:
+
+        target_path = os.path.abspath(
+            os.getcwd()
+        )
+
+    # ------------------------------------------------------
+    # Find configuration
+    # ------------------------------------------------------
+
+    config_path = os.path.join(
+        target_path,
+        GitRepo.CONFIG_FILE
+    )
+
+    if not os.path.exists(config_path):
+
+        entered_path = input(
+            "📁 Enter project path: "
+        ).strip()
+
+        if not entered_path:
 
             print(
-                "❌ Commit failed."
+                "❌ Project path cannot be empty."
             )
 
             return False
 
-        # --------------------------------------------------------
-        # Push
-        # --------------------------------------------------------
-
-        return self._push_to_remote()
-
-    # ============================================================
-    # NEW SESSION INTERNAL PUSH
-    # ============================================================
-
-    @classmethod
-    def _push_from_config(
-        cls,
-        path=None,
-        message=None
-    ):
-        """
-        Internal method used by the package-level push_again()
-        function after a Colab runtime restart/disconnect.
-
-        It loads .colabgit_config from Google Drive and recreates
-        the GitRepo state without asking for the configuration
-        again.
-        """
-
-        # --------------------------------------------------------
-        # 1. Resolve project path
-        # --------------------------------------------------------
-
-        if path:
-
-            target_path = os.path.abspath(
-                os.path.expanduser(path)
+        target_path = os.path.abspath(
+            os.path.expanduser(
+                entered_path
             )
-
-        else:
-
-            target_path = os.path.abspath(
-                os.getcwd()
-            )
+        )
 
         config_path = os.path.join(
             target_path,
-            cls.CONFIG_FILE
+            GitRepo.CONFIG_FILE
         )
 
-        # --------------------------------------------------------
-        # 2. If configuration isn't found, ask for path
-        # --------------------------------------------------------
+    # ------------------------------------------------------
+    # Configuration must exist
+    # ------------------------------------------------------
 
-        if not os.path.exists(
-            config_path
-        ):
+    if not os.path.exists(config_path):
 
-            entered_path = input(
-                "📁 Enter project path containing "
-                f"{cls.CONFIG_FILE}: "
-            ).strip()
+        print(
+            "❌ No .colabgit_config found."
+        )
 
-            if not entered_path:
+        print(
+            "Run GitRepo() once first."
+        )
 
-                print(
-                    "❌ Project path cannot be empty."
-                )
+        return False
 
-                return False
+    # ------------------------------------------------------
+    # Git repository must exist
+    # ------------------------------------------------------
 
-            target_path = os.path.abspath(
-                os.path.expanduser(
-                    entered_path
-                )
-            )
-
-            config_path = os.path.join(
-                target_path,
-                cls.CONFIG_FILE
-            )
-
-        # --------------------------------------------------------
-        # 3. Check configuration
-        # --------------------------------------------------------
-
-        if not os.path.exists(
-            config_path
-        ):
-
-            print(
-                "❌ No configuration found.\n"
-                "Run GitRepo() once first."
-            )
-
-            return False
-
-        # --------------------------------------------------------
-        # 4. Check Git repository
-        # --------------------------------------------------------
-
-        git_dir = os.path.join(
+    if not os.path.isdir(
+        os.path.join(
             target_path,
             ".git"
         )
+    ):
 
-        if not os.path.isdir(
-            git_dir
-        ):
+        print(
+            "❌ Git repository not found."
+        )
 
-            print(
-                "❌ Git repository not found.\n"
-                "Run GitRepo() to initialize it."
-            )
+        print(
+            "Run GitRepo() once first."
+        )
 
-            return False
+        return False
 
-        # --------------------------------------------------------
-        # 5. Load saved configuration
-        # --------------------------------------------------------
+    # ------------------------------------------------------
+    # Load configuration
+    # ------------------------------------------------------
 
-        try:
+    try:
 
-            with open(
-                config_path,
-                "r",
-                encoding="utf-8"
-            ) as file:
-                config = json.load(file)
+        with open(
+            config_path,
+            "r",
+            encoding="utf-8"
+        ) as file:
 
-        except json.JSONDecodeError:
+            config = json.load(file)
 
-            print(
-                "❌ Invalid .colabgit_config file."
-            )
+    except json.JSONDecodeError:
 
-            return False
+        print(
+            "❌ Invalid .colabgit_config."
+        )
 
-        # --------------------------------------------------------
-        # 6. Validate configuration
-        # --------------------------------------------------------
+        return False
 
-        required = [
-            "username",
-            "repo_url",
-            "repo_name",
-            "email",
-            "token",
+    # ------------------------------------------------------
+    # Validate configuration
+    # ------------------------------------------------------
+
+    required = [
+        "username",
+        "repo_url",
+        "repo_name",
+        "email",
+        "token"
+    ]
+
+    missing = [
+        key
+        for key in required
+        if not config.get(key)
+    ]
+
+    if missing:
+
+        print(
+            "❌ Configuration is incomplete."
+        )
+
+        print(
+            "Missing: "
+            + ", ".join(missing)
+        )
+
+        return False
+
+    # ------------------------------------------------------
+    # Recreate GitRepo object WITHOUT __init__
+    # ------------------------------------------------------
+
+    repo = GitRepo.__new__(GitRepo)
+
+    repo.path = target_path
+    repo.username = config["username"]
+    repo.repo_url = config["repo_url"]
+    repo.repo_name = config["repo_name"]
+    repo.email = config["email"]
+    repo.token = config["token"]
+
+    os.chdir(repo.path)
+
+    # ------------------------------------------------------
+    # Restore Git setup
+    # ------------------------------------------------------
+
+    repo._ensure_gitignore()
+    repo._ensure_git()
+    repo._ensure_remote()
+
+    # ------------------------------------------------------
+    # Check changes
+    # ------------------------------------------------------
+
+    if not repo._has_changes():
+
+        print(
+            "✓ Nothing to commit. "
+            "Working tree is clean."
+        )
+
+        return True
+
+    # ------------------------------------------------------
+    # Commit message
+    # ------------------------------------------------------
+
+    commit_message = (
+        message
+        or input(
+            "💬 Enter commit message "
+            "(Press Enter for 'Update changes'): "
+        ).strip()
+    )
+
+    if not commit_message:
+        commit_message = "Update changes"
+
+    # ------------------------------------------------------
+    # Stage
+    # ------------------------------------------------------
+
+    repo._run(
+        [
+            "git",
+            "add",
+            "."
         ]
+    )
 
-        missing = [
-            key
-            for key in required
-            if not config.get(key)
+    # ------------------------------------------------------
+    # Commit
+    # ------------------------------------------------------
+
+    commit = repo._run(
+        [
+            "git",
+            "commit",
+            "-m",
+            commit_message
         ]
+    )
 
-        if missing:
+    if commit.returncode != 0:
 
-            print(
-                "❌ Configuration is incomplete."
-            )
-
-            print(
-                "Missing: "
-                + ", ".join(missing)
-            )
-
-            return False
-
-        # --------------------------------------------------------
-        # 7. Create GitRepo object WITHOUT calling __init__
-        # --------------------------------------------------------
-
-        repo = cls.__new__(cls)
-
-        repo.path = target_path
-        repo.username = config["username"]
-        repo.repo_url = config["repo_url"]
-        repo.repo_name = config["repo_name"]
-        repo.email = config["email"]
-        repo.token = config["token"]
-
-        # --------------------------------------------------------
-        # 8. Change working directory
-        # --------------------------------------------------------
-
-        os.chdir(
-            repo.path
+        print(
+            "❌ Commit failed."
         )
 
-        # --------------------------------------------------------
-        # 9. Restore Git configuration
-        # --------------------------------------------------------
+        return False
 
-        repo._ensure_gitignore()
-        repo._ensure_git_repo()
-        repo._ensure_remote()
+    # ------------------------------------------------------
+    # Push
+    # ------------------------------------------------------
 
-        # --------------------------------------------------------
-        # 10. Check changes
-        # --------------------------------------------------------
-
-        if not repo._has_changes():
-
-            print(
-                "✓ Nothing to commit. "
-                "Working tree is clean."
-            )
-
-            return True
-
-        # --------------------------------------------------------
-        # 11. Commit message
-        # --------------------------------------------------------
-
-        commit_msg = (
-            message
-            or input(
-                "💬 Enter commit message "
-                "(Press Enter for 'Update changes'): "
-            ).strip()
-        )
-
-        if not commit_msg:
-            commit_msg = "Update changes"
-
-        # --------------------------------------------------------
-        # 12. Stage
-        # --------------------------------------------------------
-
-        repo._run_cmd(
-            [
-                "git",
-                "add",
-                "."
-            ],
-            check=True
-        )
-
-        # --------------------------------------------------------
-        # 13. Commit
-        # --------------------------------------------------------
-
-        commit_result = repo._run_cmd(
-            [
-                "git",
-                "commit",
-                "-m",
-                commit_msg
-            ],
-            check=False
-        )
-
-        if commit_result.returncode != 0:
-
-            print(
-                "❌ Commit failed."
-            )
-
-            return False
-
-        # --------------------------------------------------------
-        # 14. Push
-        # --------------------------------------------------------
-
-        return repo._push_to_remote()
+    return repo._push()
