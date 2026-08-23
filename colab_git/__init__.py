@@ -1,10 +1,22 @@
 from .helper import GitRepo
 
-# Standalone shortcut for pushing after a Colab
-# runtime restart/disconnect.
-quick_push = GitRepo.push_again
+
+def push_again(path=None, message=None):
+    """
+    Push changes after a Colab runtime restart/disconnect.
+
+    Example:
+        from colab_git import push_again
+        push_again()
+    """
+
+    return GitRepo._push_from_config(
+        path=path,
+        message=message
+    )
+
 
 __all__ = [
     "GitRepo",
-    "quick_push",
+    "push_again",
 ]
