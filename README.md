@@ -14,7 +14,7 @@ A lightweight Python utility designed for Google Colab to automate repository in
 Install directly into your Google Colab runtime:
 
 ```bash
-!pip install --upgrade git+[https://github.com/prakashpoint17/colab_git_helper.git](https://github.com/prakashpoint17/colab_git_helper.git)
+!pip install --upgrade git+https://github.com/prakashpoint17/colab_git_helper.git
 
 ```
 
